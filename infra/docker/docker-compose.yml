@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: faultforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: faultforge
+      POSTGRES_PASSWORD: faultforge_secure_pass
+      POSTGRES_DB: faultforge_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U faultforge -d faultforge_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: faultforge-redis
+    restart: unless-stopped
+    command: ['redis-server', '--requirepass', 'faultforge_redis_pass']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'faultforge_redis_pass', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: faultforge_postgres_data
+  redis_data:
+    name: faultforge_redis_data

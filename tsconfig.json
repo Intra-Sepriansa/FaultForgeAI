@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@faultforge/config": ["packages/config/src/index.ts"],
+      "@faultforge/contracts": ["packages/contracts/src/index.ts"],
+      "@faultforge/database": ["packages/database/src/index.ts"],
+      "@faultforge/security": ["packages/security/src/index.ts"],
+      "@faultforge/commerce-lab": ["labs/commerce-lab/src/index.ts"],
+      "@faultforge/payment-lab": ["labs/payment-lab/src/index.ts"],
+      "@faultforge/perf-lab": ["labs/perf-lab/src/index.ts"],
+      "@faultforge/worker": ["apps/worker/src/index.ts"],
+      "@faultforge/observability": ["packages/observability/src/index.ts"],
+      "@faultforge/ui": ["packages/ui/src/index.ts"],
+      "@faultforge/agent-runtime": ["packages/agent-runtime/src/index.ts"],
+      "@faultforge/arena-eval": ["packages/arena-eval/src/index.ts"],
+      "@faultforge/canary-engine": ["packages/canary-engine/src/index.ts"],
+      "@faultforge/reference-library": ["packages/reference-library/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*", "apps/*/src/**/*", "tests/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist", "build"]
+}

@@ -1,0 +1,353 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  ENGINEER
+  REVIEWER
+  VIEWER
+}
+
+enum IncidentSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum IncidentStatus {
+  INITIATED
+  FAULT_INJECTED
+  INVESTIGATING
+  REPRODUCED
+  SOLUTIONS_GENERATED
+  EVALUATED
+  APPROVED
+  DEPLOYED_CANARY
+  RESOLVED
+  ROLLED_BACK
+}
+
+enum ClaimStatus {
+  VERIFIED
+  INFERRED
+  UNVERIFIED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+model Organization {
+  id          String      @id @default(uuid())
+  name        String
+  slug        String      @unique
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  workspaces  Workspace[]
+  users       User[]
+
+  @@map("organizations")
+}
+
+model Workspace {
+  id             String         @id @default(uuid())
+  orgId          String         @map("org_id")
+  name           String
+  slug           String
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  organization   Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  memberships    Membership[]
+  incidentRuns   IncidentRun[]
+  auditEvents    AuditEvent[]
+  outboxEvents   OutboxEvent[]
+
+  @@unique([orgId, slug])
+  @@index([orgId])
+  @@map("workspaces")
+}
+
+model User {
+  id             String         @id @default(uuid())
+  orgId          String         @map("org_id")
+  email          String         @unique
+  name           String
+  passwordHash   String?        @map("password_hash")
+  oidcSub        String?        @unique @map("oidc_sub")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  organization   Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  memberships    Membership[]
+  auditEvents    AuditEvent[]
+  approvals      Approval[]
+
+  @@index([orgId])
+  @@map("users")
+}
+
+model Membership {
+  id          String      @id @default(uuid())
+  userId      String      @map("user_id")
+  workspaceId String      @map("workspace_id")
+  role        OrgRole     @default(ENGINEER)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+  @@map("memberships")
+}
+
+model LabDefinition {
+  id          String               @id @default(uuid())
+  name        String               @unique
+  description String
+  version     String
+  scenarios   ScenarioDefinition[]
+  createdAt   DateTime             @default(now()) @map("created_at")
+
+  @@map("lab_definitions")
+}
+
+model ScenarioDefinition {
+  id              String         @id @default(uuid())
+  labId           String         @map("lab_id")
+  code            String         @unique // e.g. "COMMERCE_RACE_CONDITION"
+  title           String
+  description     String
+  category        String         // "CONCURRENCY", "EVENT_LOOP", "SECURITY_IDOR", etc.
+  difficulty      String
+  rootCause       String         @map("root_cause")
+  injectionConfig Json           @map("injection_config")
+  referenceTests  Json           @map("reference_tests")
+  lab             LabDefinition  @relation(fields: [labId], references: [id])
+  incidentRuns    IncidentRun[]
+
+  @@index([labId])
+  @@map("scenario_definitions")
+}
+
+model IncidentRun {
+  id             String              @id @default(uuid())
+  workspaceId    String              @map("workspace_id")
+  scenarioId     String              @map("scenario_id")
+  status         IncidentStatus      @default(INITIATED)
+  severity       IncidentSeverity    @default(HIGH)
+  idempotencyKey String?             @unique @map("idempotency_key")
+  snapshotHash   String              @map("snapshot_hash")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  workspace      Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scenario       ScenarioDefinition  @relation(fields: [scenarioId], references: [id])
+  faults         FaultInjection[]
+  evidence       EvidenceArtifact[]
+  hypotheses     Hypothesis[]
+  agentRuns      AgentRun[]
+  evalCases      EvaluationCase[]
+
+  @@index([workspaceId, status])
+  @@index([scenarioId])
+  @@map("incident_runs")
+}
+
+model FaultInjection {
+  id             String       @id @default(uuid())
+  incidentRunId  String       @map("incident_run_id")
+  injectedAt     DateTime     @default(now()) @map("injected_at")
+  payload        Json
+  responseStatus String       @map("response_status")
+  incidentRun    IncidentRun  @relation(fields: [incidentRunId], references: [id], onDelete: Cascade)
+
+  @@index([incidentRunId])
+  @@map("fault_injections")
+}
+
+model EvidenceArtifact {
+  id             String       @id @default(uuid())
+  incidentRunId  String       @map("incident_run_id")
+  type           String       // "LOG", "TRACE_SPAN", "METRIC_SERIES", "TEST_FAILURE"
+  sourceLocation String       @map("source_location")
+  payload        Json
+  collectedAt    DateTime     @default(now()) @map("collected_at")
+  incidentRun    IncidentRun  @relation(fields: [incidentRunId], references: [id], onDelete: Cascade)
+
+  @@index([incidentRunId, type])
+  @@map("evidence_artifacts")
+}
+
+model Hypothesis {
+  id             String       @id @default(uuid())
+  incidentRunId  String       @map("incident_run_id")
+  rank           Int
+  description    String
+  confidence     Float
+  claimStatus    ClaimStatus  @default(UNVERIFIED) @map("claim_status")
+  evidenceCites  String[]     @map("evidence_cites")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  incidentRun    IncidentRun  @relation(fields: [incidentRunId], references: [id], onDelete: Cascade)
+
+  @@index([incidentRunId])
+  @@map("hypotheses")
+}
+
+model AgentRun {
+  id               String       @id @default(uuid())
+  incidentRunId    String       @map("incident_run_id")
+  specialistRole   String       @map("specialist_role")
+  modelIdentifier  String       @map("model_identifier")
+  promptTokens     Int          @default(0) @map("prompt_tokens")
+  completionTokens Int          @default(0) @map("completion_tokens")
+  costEstimateUsd  Float        @default(0) @map("cost_estimate_usd")
+  durationMs       Int          @default(0) @map("duration_ms")
+  startedAt        DateTime     @default(now()) @map("started_at")
+  completedAt      DateTime?    @map("completed_at")
+  incidentRun      IncidentRun  @relation(fields: [incidentRunId], references: [id], onDelete: Cascade)
+  toolCalls        ToolCall[]
+
+  @@index([incidentRunId, specialistRole])
+  @@map("agent_runs")
+}
+
+model ToolCall {
+  id             String       @id @default(uuid())
+  agentRunId     String       @map("agent_run_id")
+  toolName       String       @map("tool_name")
+  inputPayload   Json         @map("input_payload")
+  outputPayload  Json?        @map("output_payload")
+  isError        Boolean      @default(false) @map("is_error")
+  executionMs    Int          @map("execution_ms")
+  calledAt       DateTime     @default(now()) @map("called_at")
+  agentRun       AgentRun     @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  @@index([agentRunId])
+  @@map("tool_calls")
+}
+
+model EvaluationCase {
+  id             String              @id @default(uuid())
+  incidentRunId  String              @map("incident_run_id")
+  frozenInputs   Json                @map("frozen_inputs")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  incidentRun    IncidentRun         @relation(fields: [incidentRunId], references: [id], onDelete: Cascade)
+  candidates     CandidateResponse[]
+  approvals      Approval[]
+
+  @@index([incidentRunId])
+  @@map("evaluation_cases")
+}
+
+model CandidateResponse {
+  id             String            @id @default(uuid())
+  evalCaseId     String            @map("eval_case_id")
+  blindAlias     String            @map("blind_alias")
+  modelProvider  String            @map("model_provider")
+  patchDiff      String            @map("patch_diff")
+  rationaleText  String            @map("rationale_text")
+  isPassingTests Boolean           @default(false) @map("is_passing_tests")
+  hasSecFlaws    Boolean           @default(false) @map("has_sec_flaws")
+  evalCase       EvaluationCase    @relation(fields: [evalCaseId], references: [id], onDelete: Cascade)
+  testRuns       TestRun[]
+  scores         EvaluationScore[]
+
+  @@index([evalCaseId])
+  @@map("candidate_responses")
+}
+
+model TestRun {
+  id             String            @id @default(uuid())
+  candidateId    String            @map("candidate_id")
+  testType       String
+  passed         Boolean
+  durationMs     Int               @map("duration_ms")
+  stdoutSnippet  String            @map("stdout_snippet")
+  candidate      CandidateResponse @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@map("test_runs")
+}
+
+model RubricVersion {
+  id          String            @id @default(uuid())
+  version     String            @unique
+  schema      Json
+  isActive    Boolean           @default(true) @map("is_active")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  scores      EvaluationScore[]
+
+  @@map("rubric_versions")
+}
+
+model EvaluationScore {
+  id             String            @id @default(uuid())
+  candidateId    String            @map("candidate_id")
+  rubricId       String            @map("rubric_id")
+  totalScore     Float             @map("total_score")
+  breakdown      Json
+  judgeReasoning String            @map("judge_reasoning")
+  candidate      CandidateResponse @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  rubric         RubricVersion     @relation(fields: [rubricId], references: [id])
+
+  @@index([candidateId, rubricId])
+  @@map("evaluation_scores")
+}
+
+model Approval {
+  id             String         @id @default(uuid())
+  evalCaseId     String         @map("eval_case_id")
+  userId         String         @map("user_id")
+  decision       String
+  comments       String?
+  decidedAt      DateTime       @default(now()) @map("decided_at")
+  evalCase       EvaluationCase @relation(fields: [evalCaseId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id])
+
+  @@index([evalCaseId])
+  @@map("approvals")
+}
+
+model AuditEvent {
+  id             String       @id @default(uuid())
+  workspaceId    String       @map("workspace_id")
+  userId         String?      @map("user_id")
+  action         String
+  resourceType   String       @map("resource_type")
+  resourceId     String       @map("resource_id")
+  metadata       Json
+  ipAddress      String?      @map("ip_address")
+  occurredAt     DateTime     @default(now()) @map("occurred_at")
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId, occurredAt])
+  @@index([action])
+  @@map("audit_events")
+}
+
+model OutboxEvent {
+  id             String       @id @default(uuid())
+  workspaceId    String       @map("workspace_id")
+  eventType      String       @map("event_type")
+  payload        Json
+  status         OutboxStatus @default(PENDING)
+  retryCount     Int          @default(0) @map("retry_count")
+  lastError      String?      @map("last_error")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  processedAt    DateTime?    @map("processed_at")
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([workspaceId])
+  @@map("outbox_events")
+}

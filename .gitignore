@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing and Coverage
+coverage/
+*.lcov
+.nyc_output
+
+# Build and Transpilation
+dist/
+build/
+.turbo
+*.tsbuildinfo
+
+# Environment and Secrets (Never commit credentials)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs and Telemetry
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+loki-data/
+tempo-data/
+prometheus-data/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Ephemeral Sandboxes and Dumps
+sandbox-temp/
+*.sql.gz

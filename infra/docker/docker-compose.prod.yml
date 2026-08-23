@@ -1,0 +1,132 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: faultforge-prod-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-faultforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-faultforge_secret_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-faultforge_db}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U faultforge -d faultforge_db']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - faultforge-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: faultforge-prod-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-faultforge_redis_pw}
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', 'faultforge_redis_pw', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - faultforge-network
+
+  commerce-lab:
+    build:
+      context: ../..
+      dockerfile: labs/commerce-lab/Dockerfile
+    container_name: faultforge-prod-commerce-lab
+    restart: unless-stopped
+    ports:
+      - '4100:4100'
+    networks:
+      - faultforge-network
+
+  payment-lab:
+    build:
+      context: ../..
+      dockerfile: labs/payment-lab/Dockerfile
+    container_name: faultforge-prod-payment-lab
+    restart: unless-stopped
+    ports:
+      - '4200:4200'
+    networks:
+      - faultforge-network
+
+  perf-lab:
+    build:
+      context: ../..
+      dockerfile: labs/perf-lab/Dockerfile
+    container_name: faultforge-prod-perf-lab
+    restart: unless-stopped
+    ports:
+      - '4300:4300'
+    networks:
+      - faultforge-network
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    container_name: faultforge-prod-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://faultforge:faultforge_secret_pw@postgres:5432/faultforge_db?schema=public
+      REDIS_URL: redis://:faultforge_redis_pw@redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:-faultforge_prod_session_secret_at_least_32_chars_long!}
+      CORS_ORIGIN: http://localhost:80,http://localhost:3000
+    ports:
+      - '4000:4000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - faultforge-network
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    container_name: faultforge-prod-worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://faultforge:faultforge_secret_pw@postgres:5432/faultforge_db?schema=public
+      REDIS_URL: redis://:faultforge_redis_pw@redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - faultforge-network
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    container_name: faultforge-prod-web
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    depends_on:
+      - api
+    networks:
+      - faultforge-network
+
+networks:
+  faultforge-network:
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
