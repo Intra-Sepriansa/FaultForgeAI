@@ -1,9 +1,14 @@
 # FaultForge AI — Controlled Chaos Engineering & Agentic Incident Adjudication Platform
 
-[![CI Pipeline](https://github.com/faultforge/faultforge-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/faultforge/faultforge-ai/actions)
+[![CI Pipeline](https://github.com/Intra-Sepriansa/FaultForgeAI/actions/workflows/ci.yml/badge.svg)](https://github.com/Intra-Sepriansa/FaultForgeAI/actions)
+[![Node.js](https://img.shields.io/badge/Node.js-v22%20LTS-green.svg)](https://nodejs.org/)
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-5.7%20Strict-blue.svg)](https://www.typescriptlang.org/)
+[![Fastify](https://img.shields.io/badge/Fastify-v5-black.svg)](https://fastify.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-red.svg)](https://redis.io/)
+[![React](https://img.shields.io/badge/React-18-cyan.svg)](https://react.dev/)
+[![Tested with Vitest](https://img.shields.io/badge/Tested%20with-Vitest-yellow.svg)](https://vitest.dev/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
-[![Vitest](https://img.shields.io/badge/Tested%20with-Vitest-yellow.svg)](https://vitest.dev/)
 
 > **FaultForge AI** is an enterprise-grade platform for **controlled chaos injection**, **multi-agent telemetry investigation**, **double-blind AI solution adjudication**, and **progressive canary deployment** across distributed microservices.
 
