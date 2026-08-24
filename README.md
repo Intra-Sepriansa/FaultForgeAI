@@ -240,3 +240,6 @@ npx tsx infra/scripts/benchmark-load.ts
 ## 📄 License
 
 Apache License 2.0. Copyright (c) 2026 FaultForge AI Contributors.
+
+## API Specification
+Comprehensive REST API documentation available at /docs.
